@@ -10,6 +10,12 @@ A Tampermonkey userscript that adds batch deletion to ChatGPT, Gemini, and Claud
 | Gemini | `gemini.google.com` |
 | Claude | `claude.ai` |
 
+## Installation
+
+1. Install a userscript manager such as [Tampermonkey](https://www.tampermonkey.net/).
+2. Open [Bulk Chat Deleter on GreasyFork](https://greasyfork.org/en/scripts/588305-chatgpt-claude-gemini-bulk-chat-deleter).
+3. Click **Install this script** and confirm the installation in your userscript manager.
+
 ## Usage
 
 1. Click **Batch Delete** in the sidebar to enter batch mode
