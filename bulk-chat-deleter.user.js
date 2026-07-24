@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT/Claude/Gemini Bulk Chat Deleter
 // @namespace    https://github.com/BulkChatDeleter
-// @version      1.0.0
+// @version      1.0.1
 // @description  Add automated batch deletion to ChatGPT, Gemini, and Claude. The original sites only allow deleting one conversation at a time — requiring three clicks per deletion (open menu → click delete → confirm). This script adds a batch mode with checkboxes so you can select and delete dozens of conversations in one go.
 // @author       KiraKiraAyu
 // @match        https://chatgpt.com/*
