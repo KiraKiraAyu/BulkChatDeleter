@@ -284,12 +284,12 @@
   // ──────────────────────────────────────────────────────────────────
 
   function injectStyles() {
-    // Use style.textContent (not GM_addStyle) to bypass Trusted Types CSP on Gemini
     const style = document.createElement('style');
     style.textContent = `
       #bcd-toolbar {
         box-sizing: border-box;
         width: 100%;
+        padding: 6px 12px;
       }
 
       #bcd-toggle-btn {
@@ -308,6 +308,7 @@
         gap: 6px;
         opacity: 0.7;
         transition: opacity 0.15s, background 0.15s;
+        margin-bottom: 6px
       }
 
       #bcd-toggle-btn:hover {
@@ -324,7 +325,6 @@
         display: none;
         flex-direction: column;
         gap: 4px;
-        padding: 4px 8px 8px;
       }
 
       body.bcd-active .bcd-controls {
@@ -404,12 +404,12 @@
 
       .bcd-checkbox {
         position: absolute;
-        left: 6px;
+        right: 1rem;
         top: 50%;
-        transform: translateY(-50%);
+        transform: translateY(-70%);
         z-index: 9999;
-        width: 14px;
-        height: 14px;
+        width: 20px;
+        height: 20px;
         cursor: pointer;
         accent-color: #0070f3;
       }
