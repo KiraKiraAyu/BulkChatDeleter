@@ -20,7 +20,8 @@ A Tampermonkey userscript that adds batch deletion to ChatGPT, Gemini, and Claud
 
 1. Click **Batch Delete** in the sidebar to enter batch mode
    - Checkboxes appear on every conversation item
-2. Select conversations manually, or use **Select All** / **Clear**
+   - On Gemini, choose **Chats** or **Notebooks**
+2. Select items manually, or use **Select All** / **Clear**
 3. Click **Delete (N)** and confirm
 4. A progress bar shows the current deletion count; click **Cancel** to stop mid-run
 
@@ -37,6 +38,6 @@ Deletions run sequentially (menus and dialogs can only be open one at a time). T
 
 **ChatGPT**: Items turn gray while the API call is in progress and are removed from the DOM several seconds later. The script does not wait for DOM removal; it proceeds to the next item as soon as the confirmation is clicked.
 
-**Gemini**: Uses Angular Material components. The script waits for the sidebar's conversation list to fully render before injecting the toolbar (Angular lazy-loads it after the outer container appears).
+**Gemini**: Uses Angular Material components. The script waits for the sidebar's conversation list to fully render before injecting the toolbar (Angular lazy-loads it after the outer container appears). Notebook mode handles both the sidebar list and the `/notebooks/view` card grid.
 
 **Claude**: The confirmation dialog's Delete button is briefly disabled after opening (a safety delay). The script waits for the button to become enabled before clicking.
