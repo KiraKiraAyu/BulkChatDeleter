@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT/Claude/Gemini Bulk Chat Deleter
 // @namespace    https://github.com/BulkChatDeleter
-// @version      1.1.0
+// @version      1.2.0
 // @description  Batch delete ChatGPT and Claude conversations, plus Gemini chats and Notebooks from the Gemini page.
 // @author       KiraKiraAyu
 // @match        https://chatgpt.com/*
