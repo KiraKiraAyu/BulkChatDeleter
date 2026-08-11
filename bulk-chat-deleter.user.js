@@ -95,6 +95,9 @@
       ],
       deleteMenuItem: {
         selectors: [
+          '[data-test-id="delete-button"]',
+          'gem-menu-item[value="delete"]',
+          'gem-menu-item[leadingicon="delete"]',
           '[role="menuitem"]',
           "button[mat-menu-item]",
           'button[role="menuitem"]',
@@ -102,7 +105,10 @@
         textMatch: /delete/i,
       },
       confirmButton: {
+        strategy: "last-dialog-button",
         selectors: [
+          '[data-test-id="delete-button"]',
+          '[data-testid*="delete" i]',
           "mat-dialog-container button",
           '[role="dialog"] button',
           ".cdk-overlay-container button",
@@ -181,6 +187,9 @@
     ],
     deleteMenuItem: {
       selectors: [
+        '[data-test-id="delete-button"]',
+        'gem-menu-item[value="delete"]',
+        'gem-menu-item[leadingicon="delete"]',
         '[role="menuitem"]',
         "button[mat-menu-item]",
         'button[role="menuitem"]',
@@ -190,7 +199,10 @@
       textMatch: /delete/i,
     },
     confirmButton: {
+      strategy: "dialog-confirm-button",
       selectors: [
+        '[data-test-id="delete-button"]',
+        '[data-testid*="delete" i]',
         '[role="dialog"] button',
         '[role="alertdialog"] button',
         "mat-dialog-container button",
@@ -201,6 +213,7 @@
     },
     stepDelay: 400,
     deletionDelay: 800,
+    waitGoneTimeout: 10000,
     getItems: () => {
       if (location.pathname.startsWith("/notebooks/view")) {
         return Array.from(
@@ -300,9 +313,21 @@
   function findByText(config, root = document) {
     const candidates = root.querySelectorAll(config.selectors.join(", "));
     for (const el of candidates) {
-      if (config.textMatch.test(el.textContent.trim())) {
-        return el;
-      }
+      const searchableText = [
+        el.textContent,
+        el.getAttribute("aria-label"),
+        el.getAttribute("title"),
+        el.getAttribute("data-testid"),
+        el.getAttribute("data-test-id"),
+        el.getAttribute("data-action"),
+        el.getAttribute("data-value"),
+        el.getAttribute("value"),
+        el.getAttribute("leadingicon"),
+      ]
+        .filter(Boolean)
+        .join(" ");
+      config.textMatch.lastIndex = 0;
+      if (config.textMatch.test(searchableText)) return el;
     }
     return null;
   }
@@ -351,6 +376,47 @@
     });
   }
 
+  function isVisibleAndEnabled(el) {
+    if (!el || el.disabled || el.hasAttribute("disabled")) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden";
+  }
+
+  function findLastDialogButton() {
+    const dialogs = Array.from(
+      document.querySelectorAll(
+        '[role="dialog"], [role="alertdialog"], mat-dialog-container',
+      ),
+    ).filter(isVisibleAndEnabled);
+    const dialog = dialogs[dialogs.length - 1];
+    if (!dialog) return null;
+
+    const buttons = Array.from(dialog.querySelectorAll("button")).filter(
+      isVisibleAndEnabled,
+    );
+    return buttons[buttons.length - 1] || null;
+  }
+
+  function findDialogConfirmButton() {
+    const dialogs = Array.from(
+      document.querySelectorAll(
+        '[role="dialog"], [role="alertdialog"], mat-dialog-container',
+      ),
+    ).filter(isVisibleAndEnabled);
+    const dialog = dialogs[dialogs.length - 1];
+    if (!dialog) return null;
+
+    return (
+      Array.from(
+        dialog.querySelectorAll(
+          '[data-test-id="confirm-button"] button, [data-testid="confirm-button"] button, button[data-test-id="confirm-button"], button[data-testid="confirm-button"]',
+        ),
+      ).find(isVisibleAndEnabled) || null
+    );
+  }
+
   async function waitForMenuItemWithRetry(menuItemConfig, timeout = 4000) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
@@ -364,10 +430,16 @@
   async function waitForConfirmButton(confirmConfig, timeout = 5000) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
-      const el = findByText(confirmConfig, document.body);
+      let el;
+      if (confirmConfig.strategy === "dialog-confirm-button") {
+        el = findDialogConfirmButton();
+      } else if (confirmConfig.strategy === "last-dialog-button") {
+        el = findLastDialogButton();
+      }
+      if (!el) el = findByText(confirmConfig, document.body);
       // Wait for button to exist AND not be disabled — some sites (e.g. Claude)
       // briefly disable the confirm button after the dialog opens to prevent mis-clicks.
-      if (el && !el.disabled && !el.hasAttribute("disabled")) return el;
+      if (el && isVisibleAndEnabled(el)) return el;
       await delay(100);
     }
     throw new Error("Confirm button not found or stayed disabled");
@@ -919,6 +991,13 @@
     // 5. Wait for and click confirm button
     const confirmBtn = await waitForConfirmButton(itemConfig.confirmButton);
     confirmBtn.click();
+
+    // Notebook deletion is asynchronous. Treat a card that remains mounted as
+    // a failed deletion instead of reporting success when only the dialog closed.
+    if (itemConfig === GEMINI_NOTEBOOK_CONFIG) {
+      await waitForGone(itemEl, itemConfig.waitGoneTimeout || 10000);
+    }
+
     // Brief pause to let the dialog close before the next item's menu opens
     await delay(itemConfig.deletionDelay);
   }
