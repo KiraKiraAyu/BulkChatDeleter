@@ -144,6 +144,7 @@
       ],
       deleteMenuItem: {
         selectors: [
+          '[data-testid="delete-chat-trigger"]',
           '[role="menuitem"]',
           'button[role="menuitem"]',
           '[data-value*="delete" i]',
@@ -151,6 +152,10 @@
         textMatch: /delete/i,
       },
       confirmButton: {
+        // Claude's confirmation dialog has no stable button test id. Its
+        // destructive action is consistently the last enabled dialog button,
+        // independent of the selected UI language.
+        strategy: "last-dialog-button",
         selectors: [
           '[role="dialog"] button',
           '[role="alertdialog"] button',
