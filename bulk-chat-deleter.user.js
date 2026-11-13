@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT/Claude/Gemini Bulk Chat Deleter
 // @namespace    https://github.com/BulkChatDeleter
-// @version      1.2.0
+// @version      1.3.0
 // @description  Batch delete ChatGPT and Claude conversations, plus Gemini chats and Notebooks from the Gemini page.
 // @author       KiraKiraAyu
 // @match        https://chatgpt.com/*
@@ -35,9 +35,12 @@
       sidebar: [
         'nav[aria-label="Chat history"]',
         'nav[class*="sidebar"]',
+        'nav:has(a[href^="/c/"])',
         "nav",
       ],
       item: [
+        '.sidebar-item:has(a[href^="/c/"])',
+        'div[data-sidebar-archive-chatgpt-id]:has(a[href^="/c/"])',
         'li.list-none:has(a[href^="/c/"])',
         'li[data-sidebar-item="true"]',
         'nav li:has(a[href*="/c/"])',
@@ -45,11 +48,13 @@
       ],
       itemLink: ['a[href^="/c/"]', 'a[href*="/c/"]'],
       menuTrigger: [
+        'button[aria-haspopup="menu"]',
+        'button[aria-label="Chat actions"]',
+        'button[aria-label*="actions" i]',
         "button[data-conversation-options-trigger]",
         'button[data-testid$="-options"]',
         'button[aria-label*="options" i]',
         "button.__menu-item-trailing-btn",
-        "button:has(svg)",
       ],
       deleteMenuItem: {
         selectors: [
@@ -66,6 +71,7 @@
         ],
         textMatch: /delete/i,
       },
+      toolbarPrepend: true,
       toolbarAnchor: [
         'nav[aria-label="Chat history"] > div:first-child',
         "nav > div:first-child",
@@ -126,19 +132,25 @@
 
     claude: {
       sidebar: [
-        'nav:has(a[href^="/chat/"])',
+        'aside[aria-label="Sidebar"]',
         'aside:has(a[href^="/chat/"])',
-        "nav",
+        'nav:has(a[href^="/chat/"])',
         "aside",
+        "nav",
       ],
-      // Claude: conversation items are li > div.relative.group > a[href^="/chat/"]
-      // We target the li wrapper for checkbox placement
-      item: ['li:has(a[href^="/chat/"])', 'li:has(a[href*="/chat/"])'],
+      // Claude: conversation items are div[data-row-key^="chat:"] > ... > a[href^="/chat/"]
+      item: [
+        'div[data-row-key^="chat:"]:has(a[href^="/chat/"])',
+        'div.hit-row:has(a[href^="/chat/"])',
+        'li:has(a[href^="/chat/"])',
+        'li:has(a[href*="/chat/"])',
+      ],
       itemLink: ['a[href^="/chat/"]', 'a[href*="/chat/"]'],
       menuTrigger: [
+        'button[aria-haspopup="menu"]',
+        'button[aria-label*="options" i]',
         'button[aria-label*="conversation" i]',
         'button[aria-label*="menu" i]',
-        'button[aria-label*="options" i]',
         "div.relative.group button",
         "button:has(svg)",
       ],
@@ -157,12 +169,13 @@
         // independent of the selected UI language.
         strategy: "last-dialog-button",
         selectors: [
-          '[role="dialog"] button',
           '[role="alertdialog"] button',
+          '[role="dialog"] button',
           '[class*="modal" i] button',
         ],
         textMatch: /delete/i,
       },
+      toolbarPrepend: true,
       toolbarAnchor: [
         "nav > div:first-child",
         "nav > ul",
@@ -296,6 +309,7 @@
   let abortRequested = false;
   let sidebarObserver = null;
   let sidebarElement = null;
+  let injectingToolbar = false;
 
   // ──────────────────────────────────────────────────────────────────
   // UTILITIES
@@ -612,6 +626,8 @@
       }
 
       .bcd-checkbox {
+        appearance: auto !important;
+        -webkit-appearance: checkbox !important;
         position: absolute;
         right: 1rem;
         top: 50%;
@@ -650,7 +666,10 @@
   }
 
   async function injectToolbar() {
-    if (document.getElementById("bcd-toolbar")) return;
+    if (document.getElementById("bcd-toolbar") || injectingToolbar) return;
+    if (!sidebarElement || !document.contains(sidebarElement)) return;
+    injectingToolbar = true;
+    try {
 
     // Build toolbar without innerHTML to satisfy Trusted Types CSP (e.g. Gemini)
     const toolbar = createEl("div", { id: "bcd-toolbar" });
@@ -752,14 +771,17 @@
       }
     }
 
-    if (!insertionParent) {
+    if (!insertionParent && !cfg.toolbarPrepend) {
       try {
         const firstItem = await waitForElement(
           cfg.item[0],
           sidebarElement,
           8000,
         );
-        if (firstItem?.parentElement) {
+        if (
+          firstItem?.parentElement &&
+          getComputedStyle(firstItem.parentElement).display !== "contents"
+        ) {
           insertionParent = firstItem.parentElement;
           insertionBefore = firstItem;
         }
@@ -796,9 +818,17 @@
       .getElementById("bcd-cancel-btn")
       .addEventListener("click", abortDeletion);
 
-    document.addEventListener("change", (e) => {
-      if (e.target.matches(".bcd-checkbox")) updateDeleteButton();
-    });
+    if (batchModeActive) {
+      const toggleBtnEl = document.getElementById("bcd-toggle-btn");
+      const textSpan = toggleBtnEl?.querySelector("span:last-child");
+      if (textSpan) textSpan.textContent = " Exit Batch Mode";
+      const iconSpan = toggleBtnEl?.querySelector("span:first-child");
+      if (iconSpan) iconSpan.textContent = "✖";
+      addCheckboxesToItems();
+    }
+    } finally {
+      injectingToolbar = false;
+    }
   }
 
   function toggleBatchMode() {
@@ -862,21 +892,21 @@
       checkbox.dataset.bcdId = idx;
       if (item.classList.contains("project-card")) {
         checkbox.classList.add("bcd-notebook-card-checkbox");
-
-        // Notebook cards navigate on pointer/click events. Keep selection
-        // interactions inside the checkbox from reaching that card handler.
-        [
-          "pointerdown",
-          "pointerup",
-          "mousedown",
-          "mouseup",
-          "touchstart",
-          "click",
-          "keydown",
-        ].forEach((type) =>
-          checkbox.addEventListener(type, (event) => event.stopPropagation()),
-        );
       }
+
+      // Keep selection interactions inside the checkbox from reaching row/card
+      // click or navigation handlers (e.g. ChatGPT sidebar items, Gemini cards).
+      [
+        "pointerdown",
+        "pointerup",
+        "mousedown",
+        "mouseup",
+        "touchstart",
+        "click",
+        "keydown",
+      ].forEach((type) =>
+        checkbox.addEventListener(type, (event) => event.stopPropagation()),
+      );
 
       item.prepend(checkbox);
     });
@@ -1093,20 +1123,33 @@
   // INITIALIZATION
   // ──────────────────────────────────────────────────────────────────
 
-  async function waitForSidebar() {
+  async function waitForSidebar(timeout = 15000) {
     console.log("[BCD] Waiting for sidebar...");
-    for (const selector of cfg.sidebar) {
-      try {
-        const el = await waitForElement(selector, document, 10000);
-        if (el) {
-          console.log(`[BCD] Found sidebar with selector: ${selector}`);
-          return el;
-        }
-      } catch (e) {
-        // Try next selector
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const el = findVisibleSidebar();
+      if (el) {
+        console.log("[BCD] Found visible sidebar:", el.tagName, el.getAttribute("aria-label") || "");
+        return el;
       }
+      await delay(200);
     }
     throw new Error("Could not find sidebar");
+  }
+
+  function findVisibleSidebar() {
+    for (const selector of cfg.sidebar) {
+      try {
+        const candidates = document.querySelectorAll(selector);
+        for (const el of candidates) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) return el;
+        }
+      } catch (e) {
+        // Invalid selector, continue
+      }
+    }
+    return null;
   }
 
   function setupSidebarObserver() {
@@ -1116,12 +1159,19 @@
 
     let debounceTimer;
     sidebarObserver = new MutationObserver(() => {
-      if (!batchModeActive) return;
-
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        addCheckboxesToItems();
-      }, 50);
+        if (!document.getElementById("bcd-toolbar")) {
+          const currentSidebar = findVisibleSidebar();
+          if (currentSidebar) {
+            sidebarElement = currentSidebar;
+            injectToolbar();
+          }
+        }
+        if (batchModeActive) {
+          addCheckboxesToItems();
+        }
+      }, 100);
     });
 
     sidebarObserver.observe(document.body, {
@@ -1133,8 +1183,11 @@
   async function init() {
     try {
       injectStyles();
+      document.addEventListener("change", (e) => {
+        if (e.target.matches(".bcd-checkbox")) updateDeleteButton();
+      });
       sidebarElement = await waitForSidebar();
-      injectToolbar();
+      await injectToolbar();
       setupSidebarObserver();
       console.log("[BCD] Initialization complete");
     } catch (err) {
